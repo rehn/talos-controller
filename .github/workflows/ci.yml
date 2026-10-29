@@ -1,15 +1,19 @@
 name: CI/CD
 
+# Every push to main: test → create a release (vX.Y.Z from Conventional Commits)
+# → build and push a multi-arch image tagged with that version.
+# Pull requests: test and build the image without pushing.
+
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel a release half-way on main; PR runs may be cancelled.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -77,14 +81,61 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: 1
 
+  scripts:
+    name: Release script tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: scripts/next-version_test.sh
+
+  release:
+    name: Release
+    needs: [backend, frontend, scripts]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history + tags to find the previous release
+
+      - name: Next version
+        id: next
+        run: |
+          v=$(scripts/next-version.sh)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ -n "$v" ]; then
+            echo "Next release: $v" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No release (no new commits or [skip release])" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Create GitHub release
+        if: steps.next.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.next.outputs.version }}
+        run: gh release create "$VERSION" --target "$GITHUB_SHA" --title "$VERSION" --generate-notes
+
   docker:
     name: Docker image
-    needs: [backend, frontend]
+    needs: [backend, frontend, scripts, release]
+    # Run on PRs (release is skipped there) and after a successful release job on main.
+    if: >-
+      always() &&
+      needs.backend.result == 'success' &&
+      needs.frontend.result == 'success' &&
+      needs.scripts.result == 'success' &&
+      (needs.release.result == 'success' || needs.release.result == 'skipped')
     runs-on: ubuntu-latest
     env:
       # Set the repository variable DOCKERHUB_USERNAME and the secret DOCKERHUB_TOKEN.
       IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/talos-controller
       PUSH: ${{ github.event_name != 'pull_request' }}
+      VERSION: ${{ needs.release.outputs.version }}
     steps:
       - uses: actions/checkout@v7
 
@@ -92,8 +143,9 @@ jobs:
         if: env.PUSH == 'true'
         env:
           HAS_TOKEN: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+          HUB_USER: ${{ vars.DOCKERHUB_USERNAME }}
         run: |
-          if [ -z "${{ vars.DOCKERHUB_USERNAME }}" ] || [ "$HAS_TOKEN" != "true" ]; then
+          if [ -z "$HUB_USER" ] || [ "$HAS_TOKEN" != "true" ]; then
             echo "::error::Set the repository variable DOCKERHUB_USERNAME and the secret DOCKERHUB_TOKEN (Settings → Secrets and variables → Actions)"
             exit 1
           fi
@@ -109,19 +161,24 @@ jobs:
           username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Tags:
+      #   release vX.Y.Z  -> X.Y.Z, X.Y, latest
+      #   every main push -> main, sha-abc1234
+      #   pull request    -> pr-N (not pushed)
       - name: Image tags
         id: meta
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,format=short
+            type=semver,pattern={{version}},value=${{ env.VERSION }},enable=${{ env.VERSION != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }},enable=${{ env.VERSION != '' }}
+            type=raw,value=latest,enable=${{ env.VERSION != '' }}
+            type=raw,value=main,enable={{is_default_branch}}
+            type=sha,format=short,enable=${{ github.event_name != 'pull_request' }}
             type=ref,event=pr
 
-      - name: Build (and push on main / tags)
+      - name: Build (and push on main)
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -129,5 +186,7 @@ jobs:
           push: ${{ env.PUSH == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ env.VERSION || format('sha-{0}', github.sha) }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

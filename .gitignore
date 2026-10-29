@@ -1,6 +1,6 @@
 .env
-config/
-data/
+/config/
+/data/
 frontend/node_modules
 frontend/.next
 frontend/out

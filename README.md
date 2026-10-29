@@ -95,7 +95,8 @@ docker save talos-controller:latest | ssh pi docker load
 
 1. **Backend:** gofmt check, `go vet`, `go test -race`
 2. **Frontend:** `npm test` (helper unit tests) and `npm run build` (type check + static export)
-3. **Docker:** multi-arch image (`linux/arm64` for the Pi, `linux/amd64`), built only after both test jobs pass. Pull requests build without pushing; `main` pushes `latest` + `sha-xxxxxxx`; a tag `v1.2.3` pushes `1.2.3` and `1.2`.
+3. **Release (push to `main` only):** `scripts/next-version.sh` picks the next version from [Conventional Commits](https://www.conventionalcommits.org) since the last tag (`fix:` → patch, `feat:` → minor, `feat!:` / `BREAKING CHANGE:` → major, minor while on 0.x; anything else → patch; first release `v0.1.0`). It creates the tag and a GitHub release with generated notes. Put `[skip release]` in the commit message to skip it.
+4. **Docker:** multi-arch image (`linux/arm64` + `linux/amd64`) after tests pass. Pull requests build without pushing. On `main`: `X.Y.Z`, `X.Y`, `latest` (the newest release), `main` (newest commit) and `sha-xxxxxxx`. The version is shown in the UI sidebar and at `/api/version`.
 
 One-time setup in the GitHub repo (Settings → Secrets and variables → Actions):
 
@@ -116,7 +117,7 @@ echo "IMAGE=<your-dockerhub-user>/talos-controller:latest" >> .env
 docker compose pull && docker compose up -d --no-build
 ```
 
-Release: `git tag v0.1.0 && git push --tags`.
+Pin the Pi to a minor version (`IMAGE=<user>/talos-controller:0.2`) to get patch releases automatically, or to `latest` for every release.
 
 ## Security notes
 

@@ -22,6 +22,9 @@ import (
 	"github.com/lars/talos-controller/internal/settings"
 )
 
+// version is set at build time: -ldflags "-X main.version=v1.2.3".
+var version = "dev"
+
 //go:embed all:web/dist
 var webFS embed.FS
 
@@ -92,6 +95,8 @@ func run() error {
 	srv := api.New(ctx, store, a, jobs.NewManager(cfg.DataDir), releases.New(cfg.GitHubToken), web)
 	defer srv.Close()
 
+	srv.Version = version
+
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,
 		Handler:           srv.Handler(),
@@ -107,7 +112,7 @@ func run() error {
 		_ = httpSrv.Shutdown(shutdownCtx)
 	}()
 
-	slog.Info("talos-controller listening", "addr", cfg.ListenAddr)
+	slog.Info("talos-controller listening", "addr", cfg.ListenAddr, "version", version)
 
 	if err := httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err

@@ -22,6 +22,9 @@ import (
 
 // Server wires handlers together.
 type Server struct {
+	// Version is the build version shown in the UI.
+	Version string
+
 	settings *settings.Store
 	auth     *auth.Auth
 	jobs     *jobs.Manager
@@ -91,6 +94,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/login", s.auth.LoginHandler)
 	mux.HandleFunc("POST /api/auth/logout", s.auth.LogoutHandler)
 	mux.HandleFunc("GET /api/auth/me", s.auth.MeHandler)
+	mux.HandleFunc("GET /api/version", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"version": s.Version})
+	})
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 	mux.Handle("/api/", s.auth.Middleware(api))
 	mux.Handle("/", s.static())

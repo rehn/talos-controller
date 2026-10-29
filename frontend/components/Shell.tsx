@@ -69,6 +69,14 @@ export default function Shell({ children }: { children: ReactNode }) {
   const isLogin = pathname.startsWith("/login");
   const [user, setUser] = useState<string | null>(null);
   const [checked, setChecked] = useState(false);
+  const [version, setVersion] = useState("");
+
+  useEffect(() => {
+    api
+      .get<{ version: string }>("/version")
+      .then((v) => setVersion(v.version))
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (isLogin) {
@@ -106,7 +114,10 @@ export default function Shell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div className="sidebar-footer">
-          <span>{user}</span>
+          <span>
+            {user}
+            {version ? <span className="faint"> · {version}</span> : null}
+          </span>
           <button
             className="btn btn-sm"
             onClick={async () => {
