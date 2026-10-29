@@ -1,0 +1,20 @@
+.env
+config/
+data/
+frontend/node_modules
+frontend/.next
+frontend/out
+backend/web/dist/*
+!backend/web/dist/index.html
+_to_delete/
+.DS_Store
+*.tmp
+
+# Never commit cluster credentials
+talosconfig
+**/talosconfig
+kubeconfig
+**/kubeconfig
+secrets.yaml
+controlplane.yaml
+worker.yaml

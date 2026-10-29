@@ -1,0 +1,31 @@
+services:
+  talos-controller:
+    # Local build by default. To run the image from Docker Hub instead, set
+    # IMAGE=<user>/talos-controller:latest in .env and use:
+    #   docker compose pull && docker compose up -d --no-build
+    build: .
+    image: ${IMAGE:-talos-controller:latest}
+    container_name: talos-controller
+    restart: unless-stopped
+    # Run as your own user so the container can read talosconfig/kubeconfig
+    # (they are usually mode 600). Set PUID/PGID in .env if you are not 1000.
+    user: "${PUID:-1000}:${PGID:-1000}"
+    ports:
+      - "8080:8080"
+    environment:
+      ADMIN_USER: ${ADMIN_USER:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_PASSWORD_BCRYPT: ${ADMIN_PASSWORD_BCRYPT:-}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env (openssl rand -hex 32)}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TALOS_CONTEXT: ${TALOS_CONTEXT:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      TZ: ${TZ:-Europe/Stockholm}
+    volumes:
+      # Optional: mount files instead of uploading them in the UI (Settings).
+      # Set TALOSCONFIG_FILE / KUBECONFIG_FILE in .env; /dev/null = not used.
+      - ${TALOSCONFIG_FILE:-/dev/null}:/config/talosconfig:ro
+      - ${KUBECONFIG_FILE:-/dev/null}:/config/kubeconfig:ro
+      # Settings, uploaded configs and job history live here
+      - ./data:/data
+    mem_limit: 256m

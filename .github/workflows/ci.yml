@@ -1,0 +1,133 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (Go tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.mod
+
+      - name: Resolve modules
+        run: |
+          if [ ! -f go.sum ]; then
+            echo "::warning::backend/go.sum is not committed; running go mod tidy"
+            go mod tidy
+          fi
+          go mod download
+
+      - name: gofmt
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "::error::Files need gofmt:"; echo "$out"; exit 1; fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race -count=1 ./...
+
+  frontend:
+    name: Frontend (tests + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install
+        run: |
+          if [ -f package-lock.json ]; then npm ci --no-audit --no-fund
+          else
+            echo "::warning::frontend/package-lock.json is not committed; using npm install"
+            npm install --no-audit --no-fund
+          fi
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Type check + static export
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+  docker:
+    name: Docker image
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    env:
+      # Set the repository variable DOCKERHUB_USERNAME and the secret DOCKERHUB_TOKEN.
+      IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/talos-controller
+      PUSH: ${{ github.event_name != 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check Docker Hub settings
+        if: env.PUSH == 'true'
+        env:
+          HAS_TOKEN: ${{ secrets.DOCKERHUB_TOKEN != '' }}
+        run: |
+          if [ -z "${{ vars.DOCKERHUB_USERNAME }}" ] || [ "$HAS_TOKEN" != "true" ]; then
+            echo "::error::Set the repository variable DOCKERHUB_USERNAME and the secret DOCKERHUB_TOKEN (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+
+      # The Dockerfile cross-compiles on the build platform and the final stage has
+      # no RUN steps, so no QEMU emulation is needed for arm64.
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        if: env.PUSH == 'true'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Image tags
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+            type=ref,event=pr
+
+      - name: Build (and push on main / tags)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/arm64,linux/amd64
+          push: ${{ env.PUSH == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
