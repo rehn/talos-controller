@@ -1,5 +1,6 @@
 "use client";
 
+import Logo from "@/components/Logo";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { api } from "@/lib/api";
@@ -31,7 +32,7 @@ export default function LoginPage() {
       <form className="card login-card" onSubmit={submit}>
         <div className="card-body stack">
           <div className="brand" style={{ padding: 0 }}>
-            <div className="brand-mark">T</div>
+            <Logo size={30} />
             <div>
               Talos Controller
               <small>Sign in to continue</small>

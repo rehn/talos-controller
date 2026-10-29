@@ -1,5 +1,6 @@
 "use client";
 
+import Logo from "@/components/Logo";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
@@ -97,7 +98,7 @@ export default function Shell({ children }: { children: ReactNode }) {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">T</div>
+          <Logo size={30} />
           <div>
             Talos Controller
             <small>cluster supervisor</small>

@@ -1,7 +1,11 @@
+<p align="center"><img src="docs/assets/logo.svg" width="96" alt="Talos Controller logo"></p>
+
 # Talos Controller
 
 A small self-hosted web app for supervising and maintaining a [Talos Linux](https://www.talos.dev) cluster.
 Go backend, Next.js frontend, shipped as **one ~25 MB Docker image** that runs comfortably on a Raspberry Pi (arm64).
+
+**Documentation:** see [docs/](docs/README.md) for installation and how to use every page.
 
 ## Features
 
