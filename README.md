@@ -14,6 +14,7 @@ Go backend, Next.js frontend, shipped as **one ~25 MB Docker image** that runs c
 | **Dashboard** | Cluster status, node readiness, Talos/Kubernetes versions, etcd quorum, pod health and 8 health checks (Talos API reachability, node Ready, version skew, etcd, Talos services, memory pressure, disk usage, workloads) |
 | **Nodes** | CPU load, memory, uptime per node. Detail page with Talos services (restart), service logs, kernel log (dmesg), filesystem usage, installer image and redacted machine config. Reboot with type-to-confirm |
 | **Workloads** | Crash-looping / pending / failed / not-ready pods, deployments/statefulsets/daemonsets missing replicas, warning events from the last 2 h |
+| **Kubernetes** | Read-only browser: pods with CPU/memory usage (metrics-server) and logs, deployments, services, Gateway API HTTPRoutes, ConfigMaps and Secrets (keys and sizes only, never values) per namespace |
 | **etcd** | Members, leader, DB size, fault tolerance, alarms |
 | **Upgrades** | Latest Talos and Kubernetes releases from GitHub, a *recommended next* version (one minor at a time), and a **rolling Talos upgrade**: control planes first, one node at a time, preflight checks, waits for reboot + correct version + node Ready + etcd healthy before moving on. Each node keeps its own installer image (Image Factory schematic / extensions), only the tag changes |
 | **Config patches** | Strategic-merge or JSON6902 patches against a whole role (all control planes / all workers / all nodes) or picked nodes. **Dry run with diff** is required, then a **rolling apply**: dry run on every target first (nothing is applied if one fails), then one node at a time, control planes first, waiting for reboot, node Ready and etcd health before the next |
@@ -95,12 +96,19 @@ docker save talos-controller:latest | ssh pi docker load
 
 ## CI/CD (GitHub Actions → Docker Hub)
 
-`.github/workflows/ci.yml` runs on every push and pull request:
+`.github/workflows/ci.yml` runs on pull requests, pushes to `main` and version tags:
 
 1. **Backend:** gofmt check, `go vet`, `go test -race`
 2. **Frontend:** `npm test` (helper unit tests) and `npm run build` (type check + static export)
-3. **Release (push to `main` only):** `scripts/next-version.sh` picks the next version from [Conventional Commits](https://www.conventionalcommits.org) since the last tag (`fix:` → patch, `feat:` → minor, `feat!:` / `BREAKING CHANGE:` → major, minor while on 0.x; anything else → patch; first release `v0.1.0`). It creates the tag and a GitHub release with generated notes. Put `[skip release]` in the commit message to skip it.
-4. **Docker:** multi-arch image (`linux/arm64` + `linux/amd64`) after tests pass. Pull requests build without pushing. On `main`: `X.Y.Z`, `X.Y`, `latest` (the newest release), `main` (newest commit) and `sha-xxxxxxx`. The version is shown in the UI sidebar and at `/api/version`.
+3. **Release (tag `vX.Y.Z` only):** after the tests pass, creates a GitHub release with generated notes. The tag must be on `main` and match `vMAJOR.MINOR.PATCH`, otherwise the run fails.
+4. **Docker:** multi-arch image (`linux/arm64` + `linux/amd64`). Pull requests build without pushing. A release tag pushes `X.Y.Z`, `X.Y` and `latest`. Plain pushes to `main` only run the tests. The version is shown in the UI sidebar and at `/api/version`.
+
+**Releasing:** merge the PR, then tag the merge commit:
+
+```bash
+git checkout main && git pull
+git tag v0.3.0 && git push origin v0.3.0
+```
 
 One-time setup in the GitHub repo (Settings → Secrets and variables → Actions):
 

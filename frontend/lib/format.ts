@@ -52,3 +52,8 @@ export function dateTime(ts: string | undefined): string {
   if (isNaN(t.getTime())) return "–";
   return t.toLocaleString([], { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
+
+export function millicores(m: number | null | undefined): string {
+  if (m === null || m === undefined) return "–";
+  return m >= 1000 ? `${(m / 1000).toFixed(2)} cores` : `${m}m`;
+}

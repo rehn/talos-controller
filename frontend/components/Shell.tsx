@@ -16,6 +16,7 @@ const ICONS: Record<string, ReactNode> = {
     </>
   ),
   workloads: <path d="M12 2 3 7v10l9 5 9-5V7l-9-5zm0 0v20M3 7l9 5 9-5" />,
+  kubernetes: <path d="M12 2 3 6.5v11L12 22l9-4.5v-11L12 2zm0 7v13M3 6.5l9 4.5 9-4.5" />,
   etcd: (
     <>
       <ellipse cx="12" cy="5" rx="8" ry="3" />
@@ -49,6 +50,7 @@ const NAV = [
   { href: "/", label: "Dashboard", icon: "dashboard" },
   { href: "/nodes/", label: "Nodes", icon: "nodes" },
   { href: "/workloads/", label: "Workloads", icon: "workloads" },
+  { href: "/kubernetes/", label: "Kubernetes", icon: "kubernetes" },
   { href: "/etcd/", label: "etcd", icon: "etcd" },
   { href: "/upgrades/", label: "Upgrades", icon: "upgrades" },
   { href: "/config/", label: "Config patches", icon: "config" },

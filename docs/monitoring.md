@@ -56,6 +56,17 @@ Covers all namespaces:
 - **Controllers** – Deployments, StatefulSets and DaemonSets with fewer ready replicas than desired. Tick **show healthy** to see all of them.
 - **Recent warning events** – Kubernetes warning events from the last 2 hours (at most 100).
 
+## Kubernetes browser
+
+The **Kubernetes** page is a read-only browser for cluster resources. Pick a namespace (or all) and filter by name. Tabs:
+
+- **Pods**: status, ready containers, restarts, node, age and live **CPU / memory** per pod (against its limit, or request if no limit is set). Usage comes from metrics-server; without it the columns show `–` and a notice appears. **Logs** opens a viewer with container picker, last 100–3000 lines, previous container and auto-refresh.
+- **Deployments**: ready / up-to-date / available replicas and images.
+- **Services**: type, cluster IP, external IPs, ports and selector.
+- **HTTPRoutes**: Gateway API routes with hostnames, gateways, path → backend rules and whether they are accepted. Empty if the Gateway API CRDs are not installed.
+- **ConfigMaps**: keys with sizes; **View** shows the values.
+- **Secrets**: key names, type and sizes only. Values are never sent to the browser.
+
 ## etcd
 
 Shows each member with leader/learner flags, health, database size (in use vs. allocated) and raft index, plus:

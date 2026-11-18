@@ -303,3 +303,76 @@ export interface DriftReport {
   errors: Record<string, string>;
   ignored: string[];
 }
+
+// ---- Kubernetes browser ----
+
+export interface KubeDeployment {
+  namespace: string;
+  name: string;
+  desired: number;
+  ready: number;
+  updated: number;
+  available: number;
+  images: string[] | null;
+  created: string;
+}
+
+export interface KubePod {
+  namespace: string;
+  name: string;
+  node: string;
+  phase: string;
+  status: string;
+  ready: string;
+  restarts: number;
+  containers: string[] | null;
+  created: string;
+  cpuMilli: number | null;
+  memBytes: number | null;
+  cpuRequestMilli: number;
+  cpuLimitMilli: number;
+  memRequestBytes: number;
+  memLimitBytes: number;
+}
+
+export interface KubePods {
+  pods: KubePod[];
+  metricsAvailable: boolean;
+  metricsError?: string;
+}
+
+export interface KubeService {
+  namespace: string;
+  name: string;
+  type: string;
+  clusterIP: string;
+  externalIPs: string[] | null;
+  ports: string[] | null;
+  selector: Record<string, string> | null;
+  created: string;
+}
+
+export interface KubeHTTPRoute {
+  namespace: string;
+  name: string;
+  hostnames: string[] | null;
+  gateways: string[] | null;
+  rules: string[] | null;
+  accepted: "True" | "False" | "Unknown";
+  created: string;
+}
+
+export interface KubeKeyed {
+  namespace: string;
+  name: string;
+  type?: string;
+  keys: Record<string, number>;
+  created: string;
+}
+
+export interface KubeConfigMap {
+  namespace: string;
+  name: string;
+  data: Record<string, string>;
+  binary: Record<string, number>;
+}
