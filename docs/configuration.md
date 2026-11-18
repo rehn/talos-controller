@@ -72,15 +72,13 @@ Settings shows the source of each file ("From file" or "Uploaded here"). An uplo
 
 ## Image tags
 
-Every push to `main` produces a release. Images on Docker Hub are tagged:
+A release is made by pushing a `vX.Y.Z` tag on `main`. Images on Docker Hub are tagged:
 
 | Tag | Points to |
 |---|---|
 | `latest` | The newest release |
 | `X.Y` (e.g. `0.3`) | The newest patch release of that minor version |
 | `X.Y.Z` (e.g. `0.3.1`) | Exactly that release |
-| `main` | The newest commit on `main`, released or not |
-| `sha-abc1234` | A specific commit |
 
 For a cluster you care about, pin a minor version (`:0.3`) to get fixes automatically without surprises.
 

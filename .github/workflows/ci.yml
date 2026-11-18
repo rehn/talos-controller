@@ -1,18 +1,19 @@
 name: CI/CD
 
-# Every push to main: test → create a release (vX.Y.Z from Conventional Commits)
-# → build and push a multi-arch image tagged with that version.
-# Pull requests: test and build the image without pushing.
+# Flow: merge a PR into main, then push a tag vX.Y.Z on the merge commit.
+# Pull requests and main: test (PRs also build the image without pushing).
+# Tag vX.Y.Z: test -> create the GitHub release -> build and push the multi-arch image.
 
 on:
   push:
     branches: [main]
+    tags: ["v*.*.*"]
   pull_request:
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Never cancel a release half-way on main; PR runs may be cancelled.
+  # Never cancel a release half-way; PR runs may be cancelled.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -81,60 +82,55 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: 1
 
-  scripts:
-    name: Release script tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - run: scripts/next-version_test.sh
-
   release:
     name: Release
-    needs: [backend, frontend, scripts]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend, frontend]
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
-      version: ${{ steps.next.outputs.version }}
+      version: ${{ steps.check.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # full history + tags to find the previous release
+          fetch-depth: 0 # needed to verify the tag is on main
 
-      - name: Next version
-        id: next
+      - name: Check tag
+        id: check
         run: |
-          v=$(scripts/next-version.sh)
-          echo "version=$v" >> "$GITHUB_OUTPUT"
-          if [ -n "$v" ]; then
-            echo "Next release: $v" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "No release (no new commits or [skip release])" >> "$GITHUB_STEP_SUMMARY"
+          if ! echo "$GITHUB_REF_NAME" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Tag '$GITHUB_REF_NAME' is not vMAJOR.MINOR.PATCH"
+            exit 1
           fi
+          # Only release commits that are on main (i.e. merged PRs).
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME is not on main. Merge the PR first, then tag the merge commit."
+            exit 1
+          fi
+          echo "version=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Create GitHub release
-        if: steps.next.outputs.version != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.next.outputs.version }}
-        run: gh release create "$VERSION" --target "$GITHUB_SHA" --title "$VERSION" --generate-notes
+          VERSION: ${{ steps.check.outputs.version }}
+        run: gh release create "$VERSION" --verify-tag --title "$VERSION" --generate-notes
 
   docker:
     name: Docker image
-    needs: [backend, frontend, scripts, release]
-    # Run on PRs (release is skipped there) and after a successful release job on main.
+    needs: [backend, frontend, release]
+    # PRs: build only (release is skipped). Tags: after the release job succeeds, build and push.
+    # Plain pushes to main only run the tests.
     if: >-
       always() &&
       needs.backend.result == 'success' &&
       needs.frontend.result == 'success' &&
-      needs.scripts.result == 'success' &&
-      (needs.release.result == 'success' || needs.release.result == 'skipped')
+      (github.event_name == 'pull_request' || (github.ref_type == 'tag' && needs.release.result == 'success'))
     runs-on: ubuntu-latest
     env:
       # Set the repository variable DOCKERHUB_USERNAME and the secret DOCKERHUB_TOKEN.
       IMAGE: docker.io/${{ vars.DOCKERHUB_USERNAME }}/talos-controller
-      PUSH: ${{ github.event_name != 'pull_request' }}
+      PUSH: ${{ github.ref_type == 'tag' }}
       VERSION: ${{ needs.release.outputs.version }}
     steps:
       - uses: actions/checkout@v7
@@ -163,7 +159,6 @@ jobs:
 
       # Tags:
       #   release vX.Y.Z  -> X.Y.Z, X.Y, latest
-      #   every main push -> main, sha-abc1234
       #   pull request    -> pr-N (not pushed)
       - name: Image tags
         id: meta
@@ -174,8 +169,6 @@ jobs:
             type=semver,pattern={{version}},value=${{ env.VERSION }},enable=${{ env.VERSION != '' }}
             type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }},enable=${{ env.VERSION != '' }}
             type=raw,value=latest,enable=${{ env.VERSION != '' }}
-            type=raw,value=main,enable={{is_default_branch}}
-            type=sha,format=short,enable=${{ github.event_name != 'pull_request' }}
             type=ref,event=pr
 
       - name: Build (and push on main)
